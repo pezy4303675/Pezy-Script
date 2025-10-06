@@ -161,6 +161,56 @@ local function ToggleSpeed()
     end
 end
 
+-- ==================== HIGHLIGHT EM TODOS OS HUMANOIDS ====================
+local highlightKey = Enum.KeyCode.L
+local highlightColor = Color3.fromRGB(255, 0, 0)
+local highlights = {}
+
+local function getAllHumanoidModels()
+    local models = {}
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") and obj ~= Core.Character then
+            table.insert(models, obj)
+        end
+    end
+    return models
+end
+
+local function applyHighlights()
+    for _, model in ipairs(getAllHumanoidModels()) do
+        if not model:FindFirstChildOfClass("Highlight") then
+            local highlight = Instance.new("Highlight")
+            highlight.FillColor = highlightColor
+            highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            highlight.Adornee = model
+            highlight.Parent = model
+            table.insert(highlights, highlight)
+        end
+    end
+end
+
+local function removeHighlights()
+    for _, highlight in ipairs(highlights) do
+        if highlight and highlight.Parent then
+            highlight:Destroy()
+        end
+    end
+    highlights = {}
+end
+
+Core.UserInputService.InputBegan:Connect(function(input, processed)
+    if not processed and input.KeyCode == highlightKey then
+        applyHighlights()
+    end
+end)
+
+Core.UserInputService.InputEnded:Connect(function(input)
+    if input.KeyCode == highlightKey then
+        removeHighlights()
+    end
+end)
+
 -- ==================== PULO ALTO ====================
 local function ToggleJump()
     State.Jump = not State.Jump
