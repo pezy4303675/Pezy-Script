@@ -1,8 +1,8 @@
 --[[
     Roube um Brainrot - Ultimate Script Edition
-    Sistema Completo: Bypass + Invisibilidade + Fly + GodMode + Size Changer + Iluminação + Auto Click
+    Sistema Completo: Bypass + Invisibilidade + Fly + GodMode + Size Changer + Iluminação + Auto Click + ESP
     Compatível com: Bloxburg, Roube um Brainrot e outros jogos
-    Features: Fly Mode, GodMode Ultra, Modo Muito Pequeno, Luz ao Redor, Auto Click para Armas
+    Features: Fly Mode, GodMode Ultra, Modo Muito Pequeno, Luz ao Redor, Auto Click para Armas, ESP com Highlight
 ]]
 
 repeat task.wait() until game:IsLoaded()
@@ -35,20 +35,22 @@ Core.RootPart = Core.Character:WaitForChild("HumanoidRootPart", 10)
 
 -- ==================== CONFIG ====================
 local Config = {
-    SpeedBoost = 1.0,  -- AUMENTADO: Era 0.5, agora é 1.0 (x2 mais rápido)
-    JumpBoostMultiplier = 5.0,  -- AUMENTADO: Era 2.5, agora é 5.0 (x2 mais alto)
-    MaxVelocity = 80,  -- AUMENTADO: Era 40, agora é 80 (x2)
+    SpeedBoost = 1.0,
+    JumpBoostMultiplier = 5.0,
+    MaxVelocity = 80,
     TeleportThreshold = 2,
     UseRandomization = true,
     MenuKey = Enum.KeyCode.RightBracket,
     ClickTeleportMaxDistance = 5000,
-    FlySpeed = 100,  -- AUMENTADO: Era 50, agora é 100 (x2 mais rápido)
+    FlySpeed = 100,
     FlyUpKey = Enum.KeyCode.Space,
     FlyDownKey = Enum.KeyCode.LeftShift,
-    TinySize = 0.02,  -- CORRIGIDO: Agora 2% (0.02) em vez de 10% (0.1)
+    TinySize = 0.02,
     LightBrightness = 5,
     LightRange = 60,
-    AutoClickSpeed = 0.01, -- Velocidade do auto click (em segundos)
+    AutoClickSpeed = 0.01,
+    ESPColor = Color3.fromRGB(255, 0, 0),
+    ESPOutlineColor = Color3.fromRGB(255, 255, 255),
 }
 
 -- ==================== STATE ====================
@@ -64,6 +66,7 @@ local State = {
     TinyMode = false,
     Light = false,
     AutoClick = false,
+    ESP = false,
     OriginalSpeed = 16,
     OriginalJump = 50,
     SavedPosition = nil,
@@ -161,55 +164,91 @@ local function ToggleSpeed()
     end
 end
 
--- ==================== HIGHLIGHT EM TODOS OS HUMANOIDS ====================
-local highlightKey = Enum.KeyCode.L
-local highlightColor = Color3.fromRGB(255, 0, 0)
-local highlights = {}
+-- ==================== ESP COM HIGHLIGHT ====================
+local ESPHighlights = {}
 
-local function getAllHumanoidModels()
-    local models = {}
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") and obj ~= Core.Character then
-            table.insert(models, obj)
-        end
+local function CreateESPForPlayer(player)
+    if player == Core.Player then return end
+    
+    local function addHighlight(character)
+        if not character then return end
+        
+        local existingHighlight = character:FindFirstChildOfClass("Highlight")
+        if existingHighlight then return end
+        
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "ESPHighlight"
+        highlight.FillColor = Config.ESPColor
+        highlight.OutlineColor = Config.ESPOutlineColor
+        highlight.FillTransparency = 0.5
+        highlight.OutlineTransparency = 0
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Adornee = character
+        highlight.Parent = character
+        
+        ESPHighlights[player.UserId] = highlight
     end
-    return models
+    
+    if player.Character then
+        addHighlight(player.Character)
+    end
+    
+    player.CharacterAdded:Connect(function(character)
+        if State.ESP then
+            task.wait(0.1)
+            addHighlight(character)
+        end
+    end)
 end
 
-local function applyHighlights()
-    for _, model in ipairs(getAllHumanoidModels()) do
-        if not model:FindFirstChildOfClass("Highlight") then
-            local highlight = Instance.new("Highlight")
-            highlight.FillColor = highlightColor
-            highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            highlight.Adornee = model
-            highlight.Parent = model
-            table.insert(highlights, highlight)
-        end
+local function RemoveESPForPlayer(userId)
+    if ESPHighlights[userId] then
+        pcall(function()
+            ESPHighlights[userId]:Destroy()
+        end)
+        ESPHighlights[userId] = nil
     end
 end
 
-local function removeHighlights()
-    for _, highlight in ipairs(highlights) do
-        if highlight and highlight.Parent then
-            highlight:Destroy()
+local function ToggleESP()
+    State.ESP = not State.ESP
+    
+    if State.ESP then
+        for _, player in pairs(Core.Players:GetPlayers()) do
+            CreateESPForPlayer(player)
         end
+        
+        Connections.ESPPlayerAdded = Core.Players.PlayerAdded:Connect(function(player)
+            if State.ESP then
+                CreateESPForPlayer(player)
+            end
+        end)
+        
+        Connections.ESPPlayerRemoving = Core.Players.PlayerRemoving:Connect(function(player)
+            RemoveESPForPlayer(player.UserId)
+        end)
+        
+        print("✅ ESP Ativado (Todos os jogadores visíveis)")
+    else
+        if Connections.ESPPlayerAdded then
+            Connections.ESPPlayerAdded:Disconnect()
+            Connections.ESPPlayerAdded = nil
+        end
+        if Connections.ESPPlayerRemoving then
+            Connections.ESPPlayerRemoving:Disconnect()
+            Connections.ESPPlayerRemoving = nil
+        end
+        
+        for userId, highlight in pairs(ESPHighlights) do
+            pcall(function()
+                highlight:Destroy()
+            end)
+        end
+        ESPHighlights = {}
+        
+        print("❌ ESP Desativado")
     end
-    highlights = {}
 end
-
-Core.UserInputService.InputBegan:Connect(function(input, processed)
-    if not processed and input.KeyCode == highlightKey then
-        applyHighlights()
-    end
-end)
-
-Core.UserInputService.InputEnded:Connect(function(input)
-    if input.KeyCode == highlightKey then
-        removeHighlights()
-    end
-end)
 
 -- ==================== PULO ALTO ====================
 local function ToggleJump()
@@ -496,7 +535,6 @@ local function ToggleTinyMode()
     if State.TinyMode then
         if not Core.Character or not Core.Humanoid then return end
         
-        -- Salvar valores originais
         originalHumanoidScales = {
             BodyDepthScale = Core.Humanoid.BodyDepthScale.Value,
             BodyHeightScale = Core.Humanoid.BodyHeightScale.Value,
@@ -505,17 +543,13 @@ local function ToggleTinyMode()
             HipHeight = Core.Humanoid.HipHeight
         }
         
-        -- Aplicar tamanho pequeno (2%)
         Core.Humanoid.BodyDepthScale.Value = originalHumanoidScales.BodyDepthScale * Config.TinySize
         Core.Humanoid.BodyHeightScale.Value = originalHumanoidScales.BodyHeightScale * Config.TinySize
         Core.Humanoid.BodyWidthScale.Value = originalHumanoidScales.BodyWidthScale * Config.TinySize
         Core.Humanoid.HeadScale.Value = originalHumanoidScales.HeadScale * Config.TinySize
         
-        -- CORRIGIDO: Ajustar HipHeight para manter acima do chão
-        -- Multiplicar por um valor maior para compensar o tamanho pequeno
-        Core.Humanoid.HipHeight = 0.5  -- Valor fixo pequeno mas acima do chão
+        Core.Humanoid.HipHeight = 0.5
         
-        -- Mover o personagem um pouco para cima para evitar ficar preso no chão
         if Core.RootPart then
             task.wait(0.1)
             Core.RootPart.CFrame = Core.RootPart.CFrame + Vector3.new(0, 2, 0)
@@ -777,6 +811,7 @@ Core.Player.CharacterAdded:Connect(function(char)
     local wasTinyActive = State.TinyMode
     local wasLightActive = State.Light
     local wasAutoClickActive = State.AutoClick
+    local wasESPActive = State.ESP
     
     State.Speed = false
     State.Jump = false
@@ -789,6 +824,7 @@ Core.Player.CharacterAdded:Connect(function(char)
     State.TinyMode = false
     State.Light = false
     State.AutoClick = false
+    State.ESP = false
     
     if wasSpeedActive then task.wait(0.5); ToggleSpeed() end
     if wasJumpActive then task.wait(0.5); ToggleJump() end
@@ -801,6 +837,7 @@ Core.Player.CharacterAdded:Connect(function(char)
     if wasTinyActive then task.wait(0.5); ToggleTinyMode() end
     if wasLightActive then task.wait(0.5); ToggleLight() end
     if wasAutoClickActive then task.wait(0.5); ToggleAutoClick() end
+    if wasESPActive then task.wait(0.5); ToggleESP() end
 end)
 
 -- ==================== GUI ====================
@@ -819,8 +856,8 @@ end
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "Main"
-MainFrame.Size = UDim2.new(0, 320, 0, 545)
-MainFrame.Position = UDim2.new(0.5, -160, 0.5, -272)
+MainFrame.Size = UDim2.new(0, 320, 0, 592)
+MainFrame.Position = UDim2.new(0.5, -160, 0.5, -296)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -856,7 +893,6 @@ local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 12)
 TitleCorner.Parent = TitleBar
 
--- Sistema de Drag
 local dragging, dragInput, dragStart, startPos
 
 local function update(input)
@@ -972,6 +1008,7 @@ CloseBtn.MouseButton1Click:Connect(function()
     if State.TinyMode then ToggleTinyMode() end
     if State.Light then ToggleLight() end
     if State.AutoClick then ToggleAutoClick() end
+    if State.ESP then ToggleESP() end
     
     for _, conn in pairs(Connections) do
         if conn then pcall(function() conn:Disconnect() end) end
@@ -1093,14 +1130,15 @@ CreateButton("🚀", "Fly Mode (WASD)", 235, ToggleFly, "Fly")
 CreateButton("🐜", "Ficar Muito Pequeno (2%)", 282, ToggleTinyMode, "TinyMode")
 CreateButton("💡", "Luz ao Redor", 329, ToggleLight, "Light")
 CreateButton("🔫", "Auto Click (Armas)", 376, ToggleAutoClick, "AutoClick")
-CreateButton("❤️", "GodMode Ultra", 423, ToggleGodMode, "GodMode")
+CreateButton("👀", "ESP Players (Highlight)", 423, ToggleESP, "ESP")
+CreateButton("❤️", "GodMode Ultra", 470, ToggleGodMode, "GodMode")
 
 local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 25)
 Footer.Position = UDim2.new(0, 0, 1, -30)
 Footer.BackgroundTransparency = 1
 Footer.Font = Enum.Font.Gotham
-Footer.Text = "Pressione ] para mostrar/ocultar | 11 Funções Ativas"
+Footer.Text = "Pressione ] para mostrar/ocultar | 12 Funções Ativas"
 Footer.TextColor3 = Color3.fromRGB(100, 100, 150)
 Footer.TextSize = 9
 Footer.TextTransparency = 0.5
@@ -1124,6 +1162,7 @@ print("🚀 Fly Mode (100 Speed - x2 MAIS RÁPIDO)")
 print("🐜 Ficar Muito Pequeno (2% - SUPER MINI)")
 print("💡 Luz ao Redor (60 studs)")
 print("🔫 Auto Click (Para armas)")
+print("👀 ESP Players (Ver todos os jogadores)")
 print("❤️ GodMode Ultra (Invencível)")
 print("═══════════════════════════════")
 print("🔑 Pressione ] para abrir menu")
@@ -1131,5 +1170,6 @@ print("🎮 Fly: WASD + Space (subir) + Shift (descer)")
 print("💡 Luz: Ilumina 60 studs ao seu redor")
 print("🐜 Modo Pequeno: Agora 2% - SUPER pequeno e acima do chão!")
 print("🔫 Auto Click: Segure o botão do mouse para atirar automaticamente")
+print("👀 ESP: Highlight vermelho em todos os jogadores")
 print("⚡ VELOCIDADES DOBRADAS: Tudo x2 mais rápido!")
 print("═══════════════════════════════")
